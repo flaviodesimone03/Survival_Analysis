@@ -1,0 +1,258 @@
+############################################################
+# BN (bnlearn) con whitelist clinica verso death
+# + consensus network (bootstrap + threshold) -> bn.fit OK
+# + CI tests: death ~ ciascun predittore | altri
+############################################################
+
+set.seed(2026)
+
+# =========================
+# 0) Packages
+# =========================
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+if (!requireNamespace("Rgraphviz", quietly = TRUE)) BiocManager::install("Rgraphviz")
+
+library(readxl)
+library(dplyr)
+library(bnlearn)
+library(Rgraphviz)
+
+# =========================
+# 1) Load dataset
+# =========================
+IN_PATH <- "dataset_survival_ready_bn.xlsx"
+raw <- read_excel(IN_PATH) |> as.data.frame()
+
+# =========================
+# 2) Helpers: pick column if name varies
+# =========================
+pick_col <- function(df, candidates) {
+  hit <- candidates[candidates %in% names(df)]
+  if (length(hit) == 0) {
+    stop(paste0("Nessuna di queste colonne trovata: ", paste(candidates, collapse = ", ")))
+  }
+  hit[1]
+}
+
+col_age   <- pick_col(raw, c("age_grp"))
+col_stage <- pick_col(raw, c("Stage_grp", "stage_grp"))
+col_surg  <- pick_col(raw, c("Trt_SURGERY", "Trt_Surgery", "trt_surgery"))
+col_met   <- pick_col(raw, c("Hist_METASTASIS", "HIST_METASTASIS"))
+col_rec   <- pick_col(raw, c("Hist_RECURRENCE", "HIST_recurrence", "HIST_RECURRENCE"))
+col_dead  <- pick_col(raw, c("demographic.vital_status_DEAD"))
+
+# =========================
+# 3) Build discrete dataset (SOLO FACTOR!)
+# =========================
+dat <- raw |>
+  transmute(
+    age_grp    = .data[[col_age]],
+    stage      = .data[[col_stage]],
+    surgery    = .data[[col_surg]],
+    metastasis = .data[[col_met]],
+    recurrence = .data[[col_rec]],
+    death      = .data[[col_dead]]
+  ) |>
+  mutate(
+    # age
+    age_grp = as.character(age_grp),
+    age_grp = factor(age_grp, levels = c("<60", ">=60"), ordered = TRUE),
+
+    # stage
+    stage = as.character(stage),
+    # se i livelli standard esistono, li imponiamo; altrimenti lasciamo i livelli trovati
+    stage = {
+      lv <- unique(stage)
+      std <- c("I-II","III","IV")
+      if (all(std %in% lv)) factor(stage, levels = std, ordered = TRUE) else factor(stage)
+    },
+
+    # surgery (0/1 o Yes/No)
+    surgery = as.character(surgery),
+    surgery = dplyr::case_when(
+      surgery %in% c("0","No","NO","no","None","NONE","False","FALSE", "F") ~ "No",
+      surgery %in% c("1","Yes","YES","yes","True","TRUE", "T") ~ "Yes",
+      TRUE ~ NA_character_
+    ),
+    surgery = factor(surgery, levels = c("No","Yes")),
+
+    # metastasis (0/1 -> No/Yes)
+    metastasis = as.character(metastasis),
+    metastasis = dplyr::case_when(
+      metastasis %in% c("0","No","NO","no") ~ "No",
+      metastasis %in% c("1","Yes","YES","yes") ~ "Yes",
+      TRUE ~ NA_character_
+    ),
+    metastasis = factor(metastasis, levels = c("No","Yes")),
+
+    # recurrence (0/1 -> No/Yes)
+    recurrence = as.character(recurrence),
+    recurrence = dplyr::case_when(
+      recurrence %in% c("0","No","NO","no") ~ "No",
+      recurrence %in% c("1","Yes","YES","yes") ~ "Yes",
+      TRUE ~ NA_character_
+    ),
+    recurrence = factor(recurrence, levels = c("No","Yes")),
+
+    # death (0/1 -> Alive/Dead)
+    death = as.character(death),
+    death = dplyr::case_when(
+      death %in% c("0","Alive","ALIVE","alive") ~ "Alive",
+      death %in% c("1","Dead","DEAD","dead") ~ "Dead",
+      TRUE ~ NA_character_
+    ),
+    death = factor(death, levels = c("Alive","Dead"))
+  ) |>
+  na.omit() |>
+  droplevels()
+
+cat("\nClassi colonne:\n")
+print(sapply(dat, class))
+cat("\nConteggi:\n")
+print(lapply(dat, table, useNA = "ifany"))
+
+# =========================
+# 4) Constraints: tiers -> blacklist + WHITELIST verso death
+# =========================
+# ordine clinico plausibile: età -> stadio/baseline -> trattamento -> outcome
+tiers <- list(
+  c("age_grp"),
+  c("stage","metastasis","recurrence"),
+  c("surgery"),
+  "death"
+)
+bl <- tiers2blacklist(tiers)
+
+wl <- data.frame(
+  from = c("age_grp","stage","surgery","metastasis","recurrence"),
+  to   = "death",
+  stringsAsFactors = FALSE
+)
+
+# =========================
+# 5) Structure learning (MMHC) con whitelist
+# =========================
+bn0 <- mmhc(
+  dat,
+  blacklist = bl,
+  whitelist = wl,
+  maximize.args = list(score = "bic")
+)
+
+cat("\nBIC score rete bn0:\n")
+print(score(bn0, dat, type = "bic"))
+
+graphviz.plot(bn0, layout = "dot")
+pdf("BN_mmhc_stage_surgery_whitelist.pdf", width = 8, height = 6)
+graphviz.plot(bn0, layout = "dot")
+dev.off()
+
+# =========================
+# 6) Bootstrap arc strength + averaged network (consensus)
+# =========================
+boot <- boot.strength(
+  dat, R = 1000,
+  algorithm = "mmhc",
+  algorithm.args = list(
+    blacklist = bl,
+    whitelist = wl,
+    maximize.args = list(score = "bic")
+  )
+)
+
+boot_sorted <- boot[order(-boot$strength, -boot$direction), ]
+cat("\nTop 15 archi per strength:\n")
+print(head(boot_sorted, 15))
+
+THRESH <- 0.70
+repeat {
+  bn_avg <- averaged.network(boot, threshold = THRESH)
+  ok_dag <- bnlearn::valid.dag(bn_avg)
+  cat("\nConsensus threshold =", THRESH, " | valid.dag =", ok_dag, "\n")
+  if (ok_dag) break
+  THRESH <- THRESH + 0.05
+  if (THRESH > 0.95) stop("Rete non DAG anche con soglie alte: usare cextend()/pdag2dag().")
+}
+
+cat("\nArchi consensus:\n")
+print(arcs(bn_avg))
+
+graphviz.plot(bn_avg, layout = "dot")
+out_pdf <- paste0("BN_bootstrap_averaged_stage_surgery_thr", sprintf("%02d", round(THRESH*100)), ".pdf")
+pdf(out_pdf, width = 8, height = 6)
+graphviz.plot(bn_avg, layout = "dot")
+dev.off()
+cat("\nSalvato:", out_pdf, "\n")
+
+# ============================================================
+# 7) CI TESTS: death vs predictors | others
+# ============================================================
+CI_USE_MC <- TRUE
+MC_B <- 5000
+
+ci_run <- function(x, y, z, data) {
+  if (CI_USE_MC) {
+    return(ci.test(x, y, z = z, data = data, test = "mc-x2", B = MC_B))
+  } else {
+    return(ci.test(x, y, z = z, data = data, test = "x2"))
+  }
+}
+
+cat("\n================ CI TESTS (death vs predictors) ================\n")
+
+cat("\n[1] death ⟂ age_grp | stage + surgery + metastasis + recurrence\n")
+print(ci_run("death", "age_grp", z = c("stage","surgery","metastasis","recurrence"), data = dat))
+
+cat("\n[2] death ⟂ stage | age_grp + surgery + metastasis + recurrence\n")
+print(ci_run("death", "stage", z = c("age_grp","surgery","metastasis","recurrence"), data = dat))
+
+cat("\n[3] death ⟂ surgery | age_grp + stage + metastasis + recurrence\n")
+print(ci_run("death", "surgery", z = c("age_grp","stage","metastasis","recurrence"), data = dat))
+
+cat("\n[4] death ⟂ metastasis | age_grp + stage + surgery + recurrence\n")
+print(ci_run("death", "metastasis", z = c("age_grp","stage","surgery","recurrence"), data = dat))
+
+cat("\n[5] death ⟂ recurrence | age_grp + stage + surgery + metastasis\n")
+print(ci_run("death", "recurrence", z = c("age_grp","stage","surgery","metastasis"), data = dat))
+
+cat("\n===============================================================\n")
+
+# =========================
+# 8) Markov blanket dell’outcome
+# =========================
+cat("\nMarkov blanket di death (bn_avg):\n")
+print(mb(bn_avg, "death"))
+
+# =========================
+# 9) Fit parametri + inferenza (bn.fit + cpquery)
+# =========================
+fit <- bn.fit(bn_avg, dat, method = "bayes", iss = 10)
+
+query_dead <- function(evi, n = 50000) {
+  cpquery(fit,
+          event = (death == "Dead"),
+          evidence = evi,
+          method = "lw",
+          n = n)
+}
+
+# Esempio: confronta Surgery Yes vs No a parità di stage/metastasi/recidiva/età
+# (Sostituisci i livelli con quelli reali stampati da table(dat$stage) e table(dat$surgery)!)
+evi1 <- list(stage = "IV", metastasis = "No", recurrence = "No", surgery = "Yes", age_grp = ">=60")
+evi2 <- list(stage = "IV", metastasis = "No", recurrence = "No", surgery = "No",  age_grp = ">=60")
+
+p1 <- query_dead(evi1)
+p2 <- query_dead(evi2)
+
+cat("\nP(Dead | IV, Met=No, Rec=No, Surgery=Yes, >=60) = ", p1, "\n", sep = "")
+cat("P(Dead | IV, Met=No, Rec=No, Surgery=No,  >=60) = ", p2, "\n", sep = "")
+
+cat("\nSupporto evidenza:\n")
+cat("n(evi1) =",
+    sum(dat$stage=="IV" & dat$metastasis=="No" & dat$recurrence=="No" & dat$surgery=="Yes" & dat$age_grp==">=60"),
+    "\n")
+cat("n(evi2) =",
+    sum(dat$stage=="IV" & dat$metastasis=="No" & dat$recurrence=="No" & dat$surgery=="No"  & dat$age_grp==">=60"),
+    "\n")
+
+cat("\nDONE.\n")

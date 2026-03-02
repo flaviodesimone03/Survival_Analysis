@@ -1,0 +1,5 @@
+variable,column_used,type,n_used,n_groups,chi2,p_value,note
+Hist_RECURRENCE,Hist_RECURRENCE,categorical_or_low_unique_numeric,527,2,35.86767578318552,2.1118341556415846e-09,
+N_grp,N_grp,categorical_or_low_unique_numeric,527,3,27.69460366381393,9.687087557382744e-07,
+T_grp,T_grp,categorical_or_low_unique_numeric,527,4,21.675101612470918,7.62143093725661e-05,
+Trt_SURGERY,Trt_SURGERY,categorical_or_low_unique_numeric,527,2,14.475232063666152,0.0001420146061002584,
