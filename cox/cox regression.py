@@ -9,6 +9,8 @@ Includes:
 - LRT global + per-block (lifelines)
 - C-index apparent (lifelines + scikit-survival check)
 - Harrell bootstrap optimism-corrected C-index (penalizer + low-variance handling)
+- Time-dependent AUC(t) + mean AUC (scikit-survival)
+- Brier score(t) + Integrated Brier Score, IBS (scikit-survival)
 
 pip install pandas numpy openpyxl lifelines scikit-survival scipy
 """
@@ -20,7 +22,12 @@ from scipy.stats import chi2
 from lifelines import CoxPHFitter
 
 from sksurv.util import Surv
-from sksurv.metrics import concordance_index_censored
+from sksurv.metrics import (
+    concordance_index_censored,
+    cumulative_dynamic_auc,
+    brier_score,
+    integrated_brier_score,
+)
 from sksurv.linear_model import CoxPHSurvivalAnalysis
 
 
@@ -41,6 +48,14 @@ RANDOM_SEED = 42
 
 LIFELINES_PENALIZER = 0.01
 SKSURV_ALPHA = 1e-4
+
+# ---- AUC / Brier config ----
+# Se None, usa automaticamente una griglia interna ai tempi osservati
+# (tra 10° e 90° percentile) per evitare instabilità agli estremi.
+EVAL_TIMES = None              # es. [365, 730, 1095]
+N_EVAL_TIMES = 15
+LOWER_Q = 0.10
+UPPER_Q = 0.90
 
 
 # =========================
@@ -89,9 +104,10 @@ def prepare_design(df: pd.DataFrame) -> pd.DataFrame:
     })
 
     # time/event types
-    d["EVENT"] = pd.to_numeric(d["EVENT"], errors="coerce").astype(int)
+    d["EVENT"] = pd.to_numeric(d["EVENT"], errors="coerce")
     d["TIME"]  = pd.to_numeric(d["TIME"], errors="coerce")
-    d = d.dropna(subset=["TIME"])
+    d = d.dropna(subset=["TIME", "EVENT"])
+    d["EVENT"] = d["EVENT"].astype(int)
     d["TIME"] = d["TIME"].astype(float)
 
     # RECURRENCE as 0/1 int
@@ -113,7 +129,13 @@ def prepare_design(df: pd.DataFrame) -> pd.DataFrame:
         i_dum = pd.get_dummies(d[["Intent_CURE"]].astype("category"), drop_first=True)
         d_out = pd.concat([d[["TIME", "EVENT", "RECURRENCE"]], n_dum, i_dum], axis=1)
 
-    return d_out.reset_index(drop=True)
+    # forza numerico per scikit-survival
+    for c in d_out.columns:
+        if c not in ("TIME", "EVENT"):
+            d_out[c] = pd.to_numeric(d_out[c], errors="coerce")
+
+    d_out = d_out.dropna().reset_index(drop=True)
+    return d_out
 
 
 def drop_near_zero_variance_cols(d: pd.DataFrame, threshold: float = 1e-12) -> pd.DataFrame:
@@ -225,6 +247,104 @@ def bootstrap_harrell_cindex(d: pd.DataFrame, B=500, seed=42):
 
 
 # =========================
+# NEW: AUC / BRIER HELPERS
+# =========================
+def choose_eval_times(time_arr, n_points=15, lower_q=0.10, upper_q=0.90):
+    """Choose robust evaluation times strictly inside observed follow-up range."""
+    time_arr = np.asarray(time_arr, dtype=float)
+    time_arr = time_arr[np.isfinite(time_arr)]
+
+    if time_arr.size < 5:
+        raise ValueError("Too few time points to define evaluation times.")
+
+    t_min = float(np.min(time_arr))
+    t_max = float(np.max(time_arr))
+    t_max_inner = np.nextafter(t_max, 0)  # slightly smaller than max observed time
+
+    lower = float(np.quantile(time_arr, lower_q))
+    upper = float(np.quantile(time_arr, upper_q))
+
+    lower = max(lower, t_min)
+    upper = min(upper, t_max_inner)
+
+    if upper <= lower:
+        uniq = np.unique(time_arr)
+        uniq = uniq[(uniq > t_min) & (uniq < t_max)]
+        if uniq.size < 2:
+            raise ValueError("Unable to define an internal evaluation grid for AUC/Brier.")
+        if uniq.size > n_points:
+            idx = np.linspace(0, uniq.size - 1, n_points).round().astype(int)
+            uniq = uniq[idx]
+        return uniq.astype(float)
+
+    times = np.linspace(lower, upper, n_points)
+    times = np.unique(times.astype(float))
+    times = times[(times > t_min) & (times < t_max)]
+    if times.size < 2:
+        raise ValueError("Evaluation grid too short for AUC/Brier.")
+    return times
+
+
+def get_survival_prob_matrix(estimator, X: pd.DataFrame, times: np.ndarray) -> np.ndarray:
+    """Matrix n_samples x n_times of predicted survival probabilities."""
+    surv_fns = estimator.predict_survival_function(X)
+    preds = np.asarray([[fn(t) for t in times] for fn in surv_fns], dtype=float)
+    return preds
+
+
+def evaluate_auc_brier(d: pd.DataFrame, sk_cox: CoxPHSurvivalAnalysis,
+                       eval_times=None, n_eval_times=15,
+                       lower_q=0.10, upper_q=0.90):
+    """
+    Apparent performance on the same dataset used for fitting.
+    - cumulative/dynamic AUC(t) + mean AUC
+    - Brier score(t) + IBS
+    """
+    y = Surv.from_arrays(event=d["EVENT"].astype(bool).values, time=d["TIME"].values)
+    X = d.drop(columns=["TIME", "EVENT"]).copy()
+
+    if eval_times is None:
+        times = choose_eval_times(d["TIME"].values, n_points=n_eval_times, lower_q=lower_q, upper_q=upper_q)
+    else:
+        times = np.asarray(eval_times, dtype=float)
+        t_min = float(np.min(d["TIME"].values))
+        t_max = float(np.max(d["TIME"].values))
+        t_max_inner = np.nextafter(t_max, 0)
+
+        times = np.unique(times[np.isfinite(times)])
+        times = times[(times > t_min) & (times < t_max_inner)]
+        if times.size < 1:
+            raise ValueError("Provided EVAL_TIMES are outside the valid follow-up range.")
+
+    # AUC(t): expects risk scores
+    risk_scores = sk_cox.predict(X)
+    auc_vals, mean_auc = cumulative_dynamic_auc(y, y, risk_scores, times)
+
+    # Brier / IBS: expect survival probabilities at each time point
+    surv_prob_matrix = get_survival_prob_matrix(sk_cox, X, times)
+    bs_times, bs_vals = brier_score(y, y, surv_prob_matrix, times)
+    ibs = integrated_brier_score(y, y, surv_prob_matrix, times)
+
+    auc_df = pd.DataFrame({
+        "time": times,
+        "AUC_t": auc_vals
+    })
+
+    brier_df = pd.DataFrame({
+        "time": bs_times,
+        "Brier_t": bs_vals
+    })
+
+    return {
+        "times": times,
+        "mean_auc": float(mean_auc),
+        "ibs": float(ibs),
+        "auc_table": auc_df,
+        "brier_table": brier_df,
+    }
+
+
+# =========================
 # RUN
 # =========================
 if __name__ == "__main__":
@@ -268,6 +388,25 @@ if __name__ == "__main__":
     risk = sk_cox.predict(X)
     c_sks = concordance_index_censored(d["EVENT"].astype(bool).values, d["TIME"].values, risk)[0]
     print("C-index scikit-survival (apparent):", float(c_sks))
+
+    print("\n=== Time-dependent AUC + Brier score / IBS ===")
+    auc_brier_res = evaluate_auc_brier(
+        d,
+        sk_cox,
+        eval_times=EVAL_TIMES,
+        n_eval_times=N_EVAL_TIMES,
+        lower_q=LOWER_Q,
+        upper_q=UPPER_Q
+    )
+
+    print("\nMean AUC:", round(auc_brier_res["mean_auc"], 6))
+    print("Integrated Brier Score (IBS):", round(auc_brier_res["ibs"], 6))
+
+    print("\nAUC(t) table:")
+    print(auc_brier_res["auc_table"].to_string(index=False))
+
+    print("\nBrier score(t) table:")
+    print(auc_brier_res["brier_table"].to_string(index=False))
 
     print("\n=== Bootstrap Harrell (optimism-corrected C-index) ===")
     boot_res = bootstrap_harrell_cindex(d, B=BOOTSTRAP_B, seed=RANDOM_SEED)
