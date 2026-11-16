@@ -1,77 +1,159 @@
-[English](README.md) | [Italiano](README.it.md)
-# Classical and Bayesian Probabilistic Methodologies for Survival Analysis in Oral Squamous Cell Carcinoma Patients
+# SurvivalProbabilisticOSCC
 
-[English](README.md) | [Italiano](README.it.md)
+**English** · [Italiano](README.it.md)
 
-Official repository of the Bachelor's Thesis in Computer Science — University of Salerno (Department of Computer Science, CAIS Laboratory, A.Y. 2024/2025)[cite: 1, 2].
+![Python](https://img.shields.io/badge/python-3.10-blue)
+![R](https://img.shields.io/badge/R-bnlearn%20%7C%20gRain-276DC3)
 
-- Candidate: Flavio de Simone[cite: 1]
-- Supervisor: Prof. Genoveffa Tortora[cite: 1]
-- Co-supervisors: Dr. Alessia Auriemma Citarella, Dr. Luigia Rizzo[cite: 1]
+Classical and Bayesian probabilistic methodologies for survival analysis in oral cavity carcinoma: interpretable statistical and graphical models compared against Machine Learning architectures.
 
----
+This repository contains the code of the bachelor's thesis *Metodologie probabilistiche classiche e bayesiane per l'analisi di sopravvivenza in pazienti affetti da carcinoma del cavo orale* ("Classical and Bayesian Probabilistic Methodologies for Survival Analysis in Patients with Oral Cavity Carcinoma"), Computer Science, University of Salerno (CAIS Laboratory), academic year 2024/2025.
 
-## Project Overview
+## What it does
 
-Oral Squamous Cell Carcinoma (OSCC) is a malignancy characterized by a complex prognosis and significant clinical heterogeneity[cite: 5, 11]. While modern Machine Learning (ML) algorithms achieve strong predictive performance, they often operate as black-box models, making their integration into clinical decision-making workflows challenging[cite: 11, 15, 19].
+- Consolidates over 2,000 longitudinal clinical records from three raw TCGA-HNSC tables into a single one-row-per-patient cohort of 527 Oral Squamous Cell Carcinoma (OSCC) patients.
+- Estimates non-parametric survival functions via Kaplan-Meier curves and performs univariate subgroup screening with log-rank tests.
+- Fits a multivariate Cox Proportional Hazards (CPH) regression model to quantify Hazard Ratios, validated via Likelihood Ratio Tests, Schoenfeld residuals, and 500 bootstrap resamples.
+- Learns a discrete Bayesian Network (BN) with structural clinical constraints to perform conditional probability inference and what-if scenario analyses under partial evidence.
+- Benchmarks the probabilistic models against three Machine Learning models (XGBoost, Random Survival Forest, and DeepSurv) on the same dataset.
 
-This project provides a rigorous methodological comparison between classical and Bayesian probabilistic models (intrinsically interpretable) and Machine Learning models on longitudinal clinical data, evaluating not only predictive discrimination, but also probability calibration, structural transparency, and clinical utility[cite: 5, 18, 63].
+```mermaid
+flowchart LR
+    A["oral_cancer_dataset.xlsx"] --> P["Data Preprocessing Pipeline (Python)"]
+    B["follow_up.xlsx"] --> P
+    C["fattori_di_rischio.xlsx"] --> P
+    P --> D[("Integrated Dataset<br/>527 patients")]
+    D --> K["Kaplan-Meier & Log-Rank"]
+    D --> X["Cox Proportional Hazards"]
+    D --> N["Bayesian Network (R)"]
+    K --> E["Survival Curves, Hazard Ratios,<br/>What-If Inference & ML Benchmark"]
+    X --> E
+    N --> E
+```
 
----
+## Results
 
-## Dataset and Pre-processing Pipeline
+### Cox Proportional Hazards Model
 
-The study analyzes a clinical cohort of 527 OSCC patients retrieved from the TCGA-HNSC project (The Cancer Genome Atlas - Head and Neck Squamous Cell Carcinoma)[cite: 33].
+Multivariate regression fitted on the primary clinical predictors selected via univariate log-rank screening (`Hist_RECURRENCE`, `Intent_CURE`, and nodal staging `N_grp`):
 
-The data preparation pipeline, developed entirely in Python, includes[cite: 34]:
-1. Data Integration and Restructuring: Alignment and merging of three data sources (`oral_cancer_dataset.xlsx`, `follow_up.xlsx`, `fattori_di_rischio.xlsx`) to consolidate over 2,000 longitudinal records into a single row per patient[cite: 33, 34].
-2. Time-to-Event Outcome Definition: Extraction of observation time (`days_to_follow_up`) and right-censoring/event indicator (`vital_status`)[cite: 35].
-3. Feature Engineering and Cleaning:
-   - Removal of patient identifiers (`case_id`), zero-variance features, and variables with more than 70% missing values[cite: 39].
-   - Integration of pathological TNM staging with clinical staging and grouping into clinically coherent macro-categories[cite: 39, 40].
-   - Binary encoding of treatments (`Surgery`, `Radiation`, `Pharmaceutical`), treatment intents (`Intent_CURE`, `Intent_PALLIATIVE`, etc.), and clinical history events (`Hist_RECURRENCE`, `Hist_METASTASIS`)[cite: 40, 41].
+| Covariate | Hazard Ratio (HR) | 95% CI (Low) | 95% CI (High) | p-value |
+|---|---|---|---|---|
+| `Hist_RECURRENCE` | **2.864** | 2.109 | 3.888 | 1.53e-11 |
+| `Intent_CURE` | **0.363** | 0.271 | 0.487 | 1.26e-11 |
+| `N_grp_N1` | 0.990 | 0.485 | 1.222 | 2.68e-01 |
+| `N_grp_N2+` | **1.852** | 1.401 | 2.449 | 1.50e-05 |
 
----
+- Global model significance confirmed via Likelihood Ratio Test ($\chi^2(4) = 106.27, p < 0.005$).
+- Internal validation via $B = 500$ bootstrap resamples yields an apparent C-index of **0.699** and an optimism-corrected C-index of **0.693** (mean optimism: 0.006).
 
-## Implemented Methodologies
+### Bayesian Network & What-If Inference
 
-The workflow combines traditional statistical survival analysis with probabilistic graphical modeling[cite: 18, 30]:
+In 10-fold cross-validation, the discrete Bayesian Network achieves an **AUC of 0.706** and a **Brier score of 0.214**. Using a data-driven baseline patient profile (`age_grp >= 60`, `stage = IV`, `surgery = No`, `Hist_METASTASIS = No`, `Hist_RECURRENCE = No`, $n = 91$), conditional probability queries evaluate single-factor clinical shifts:
 
-- Non-Parametric Analysis (Python - `scikit-survival`): Estimation of the overall survival function via Kaplan-Meier (KM) curves with 95% confidence bands and univariate subgroup screening via Log-Rank Test[cite: 41, 42].
-- Semi-Parametric Model (Python - `scikit-survival`): Multivariate Cox Proportional Hazards (CPH) regression for Hazard Ratio (HR) estimation[cite: 42, 43], validated via Likelihood Ratio Test (LRT)[cite: 43], Schoenfeld residuals diagnostics[cite: 43], and internal validation using 500 Bootstrap resamples[cite: 44].
-- Discrete Bayesian Network (R - `bnlearn`, `gRain`): Structure learning via the hybrid Max-Min Hill-Climbing algorithm (BIC score) incorporating prior clinical constraints (temporal blacklists and whitelists), Bayesian parameter estimation (Dirichlet prior), and what-if conditional probability inference under partial evidence[cite: 45, 46, 47].
+| Clinical Scenario | P(Dead \| Evidence) | Delta vs. Baseline |
+|---|---|---|
+| Baseline profile | 0.505 | — |
+| `surgery = Yes` | **0.087** | **-0.419** |
+| `Hist_RECURRENCE = Yes` | **0.922** | **+0.417** |
+| `Hist_METASTASIS = Yes` | **0.641** | **+0.135** |
 
----
+### Benchmark Against Machine Learning Models
 
-## Main Results and Benchmark
+Comparison across classical probabilistic models, the Bayesian Network, and three Machine Learning architectures trained on the same cohort:
 
-### 1. Key Prognostic Factors
-- Cox Proportional Hazards: Tumor recurrence (`Hist_RECURRENCE`) nearly triples the hazard of an event (HR = 2.864, p = 1.53e-11), followed by advanced nodal involvement N2+ (HR = 1.852, p = 1.50e-05)[cite: 52]. Curative treatment intent (`Intent_CURE`) shows a strong protective effect (HR = 0.363, p = 1.26e-11)[cite: 52].
-- Bayesian Network (What-If Inference): Starting from a data-driven baseline patient profile (P(Dead) = 50.5%), surgical treatment reduces the estimated probability of death to 8.7% (Delta = -41.9%), whereas recurrence raises it to 92.2% (Delta = +41.7%)[cite: 58, 59].
+| Model | C-index ↑ | IBS / Brier Score ↓ | Mean AUC ↑ |
+|---|---|---|---|
+| XGBoost | **0.7248** | 0.1891 | **0.7339** |
+| Random Survival Forest | 0.7164 | 0.1887 | 0.6997 |
+| DeepSurv | 0.7075 | 0.2039 | 0.7064 |
+| **Cox PH (This study)** | 0.6989 | **0.1876** | 0.7111 |
+| **Bayesian Network (This study)** | 0.6723 | 0.2136 | 0.7060 |
 
-### 2. Comparison with Machine Learning Models
-The probabilistic models were benchmarked on the exact same dataset against three state-of-the-art ML architectures (XGBoost, Random Survival Forest, and DeepSurv)[cite: 61, 62]:
+Read the comparison table with two methodological notes:
 
-| Model | Paradigm | C-index | IBS / Brier Score | Mean AUC |
-| :--- | :--- | :---: | :---: | :---: |
-| XGBoost | Machine Learning | 0.7248 | 0.1891 | 0.7339 |
-| Random Survival Forest | Machine Learning | 0.7164 | 0.1887 | 0.6997 |
-| DeepSurv | Deep Learning | 0.7075 | 0.2039 | 0.7064 |
-| Cox PH (This study) | Classical Statistics | 0.6989 (0.693 corr.) | 0.1876 | 0.7111 |
-| Bayesian Network (This study) | Probabilistic Graphical Model | 0.6723 | 0.2136 | 0.7060 |
+- While ensemble ML models achieve higher discrimination (C-index), the classical Cox PH model achieves the lowest Integrated Brier Score (**0.1876**) and competitive Mean AUC (**0.7111**) with intrinsic interpretability.
+- The Bayesian Network models a binary mortality endpoint rather than a continuous time-to-event hazard function; its C-index (**0.6723**) is derived by using posterior mortality probabilities as risk scores.
 
-Although XGBoost achieves the highest C-index, the Cox model obtains the best Integrated Brier Score (0.1876) and competitive discrimination without requiring post-hoc XAI techniques[cite: 62, 63]. The Bayesian Network provides stable calibration in 10-fold CV (AUC 0.706, Brier 0.214) alongside the unique capability to perform inference with incomplete clinical observations[cite: 28, 61].
+### Survival Curves & Subgroup Stratification
 
----
+Global Kaplan-Meier survival curve with 95% confidence bands (left) and stratified survival curves for curative treatment intent, nodal stage, and recurrence (right). Axis labels in figures are in Italian (*Sopravvivenza S(t)* = survival probability, *Tempo (giorni)* = follow-up days).
 
-## Technologies Used
+<p align="center">
+  <img src="results/km_global.png" width="48%" alt="Global Kaplan-Meier survival curve with 95% confidence interval">
+  <img src="results/logrank_stratified.png" width="48%" alt="Stratified Kaplan-Meier survival curves for Intent_CURE, N_grp, and Hist_RECURRENCE">
+</p>
 
-- Languages: Python, R[cite: 34, 46]
-- Python Libraries: `pandas`, `numpy`, `scikit-learn`, `scikit-survival`, `matplotlib`, `seaborn`[cite: 42]
-- R Libraries: `bnlearn`, `gRain`[cite: 46]
+### Bayesian Network Structure
 
-## Tecnologie Utilizzate
+Directed Acyclic Graph (DAG) learned via hybrid Max-Min Hill-Climbing with BIC scoring and clinical tier constraints. The Markov blanket of `death` consists of `{age_grp, stage, surgery, Hist_METASTASIS, Hist_RECURRENCE}`.
 
-- Linguaggi: Python, R[cite: 34, 46]
-- Librerie Python: `pandas`, `numpy`, `scikit-learn`, `scikit-survival`, `matplotlib`, `seaborn`[cite: 42]
-- Librerie R: `bnlearn`, `gRain`[cite: 46]
+<p align="center">
+  <img src="results/bayesian_network_dag.png" width="60%" alt="Learned Bayesian Network Directed Acyclic Graph for OSCC mortality">
+</p>
+
+## Methodological Design & Preprocessing
+
+To ensure clinical coherence and prevent statistical artifacts on a moderate-sized cohort ($n = 527$), the pipeline enforces strict preprocessing and modeling rules:
+
+1. **Patient-level consolidation.** Longitudinal follow-up records are reduced to the last available contact (`days_to_follow_up`), treatment records are pivoted into binary indicators, and risk factor tables are deduplicated before merging on `case_id`.
+2. **Missing data & sparsity control.** Features with >70% missing values (`treatment_outcome` and sparse alcohol fields) and zero-variance columns are dropped. Pathological TNM staging is integrated with clinical staging, rare levels are grouped into clinically coherent macro-categories, and high-missingness categorical variables (`laterality`, 34.0%) retain an explicit `Missing` category.
+3. **Proportional hazards verification.** Cox regression assumptions are tested via scaled Schoenfeld residuals alongside nested Likelihood Ratio Tests.
+4. **Knowledge-driven graph learning.** Bayesian Network structure learning incorporates temporal blacklists (preventing edges from the outcome to baseline/demographic variables) and clinical whitelists, with Dirichlet priors used during parameter estimation to handle low-frequency contingency cells.
+
+## Models & Workflow
+
+| Component | Environment / Libraries | Methodological Details |
+|---|---|---|
+| Data Preparation & KM | Python (`pandas`, `scikit-learn`, `scikit-survival`) | Record deduplication, TNM reconstruction, Kaplan-Meier estimation with 95% CI, univariate log-rank screening |
+| Cox Proportional Hazards | Python (`scikit-survival`, `scikit-learn`) | Partial likelihood optimization, one-hot encoding with reference levels, Schoenfeld residual diagnostics, 500-sample bootstrap validation |
+| Bayesian Network | R (`bnlearn`, `gRain`) | Hybrid Max-Min Hill-Climbing (BIC score), non-parametric bootstrap structural stability, Monte Carlo conditional independence tests, 10-fold CV (AUC & Brier score) |
+
+## Repository structure
+
+```
+ProgettoTesiFLavio_de_Simone/
+├── data/
+│   ├── oral_cancer_dataset.xlsx         clinical, staging, and treatment records
+│   ├── follow_up.xlsx                   longitudinal follow-up records
+│   └── fattori_di_rischio.xlsx          tobacco and alcohol exposure records
+├── preprocessing/                       Python scripts for cleaning, merging, and feature engineering
+├── survival_models/                     Kaplan-Meier, Log-Rank, and Cox PH scripts
+├── bayesian_network/                    R scripts for BN structure learning, inference, and CV
+├── results/                             generated figures, survival curves, and summary tables
+└── README.md                            this file
+```
+
+## Getting started
+
+```bash
+git clone https://github.com/flaviodesimone03/ProgettoTesiFLavio_de_Simone.git
+cd ProgettoTesiFLavio_de_Simone
+```
+
+1. **Python environment (Preprocessing, Kaplan-Meier, Cox PH):**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate        # Windows: .venv\Scripts\activate
+   pip install pandas numpy scikit-learn scikit-survival openpyxl matplotlib
+   ```
+2. **R environment (Bayesian Network & Exact Inference):**
+   ```r
+   install.packages(c("bnlearn", "gRain"))
+   ```
+
+## Known limitations
+
+- **Baseline representation of longitudinal events.** Clinical indicators such as `Hist_RECURRENCE` and `Hist_METASTASIS` are encoded as binary baseline indicators; in a strict time-zero diagnostic setting, recurrence occurs post-diagnosis and should be modeled as a time-varying covariate.
+- **Single-cohort evaluation.** All models are validated internally (500-iteration bootstrap for Cox PH; 10-fold cross-validation for the Bayesian Network) without external multi-institutional validation.
+- **Small subgroup counts in early stages.** Incremental probability estimates for metastasis within early tumor stages (Stages I–II and III) rely on limited sample sizes ($n = 2$ and $n = 5$, respectively) and should be interpreted with caution.
+
+## Data
+
+The dataset (`OralCancerDataset`) is derived from the **TCGA-HNSC** (*The Cancer Genome Atlas – Head and Neck Squamous Cell Carcinoma*) project, accessed via the U.S. National Cancer Institute [GDC Data Portal](https://portal.gdc.cancer.gov/projects/TCGA-HNSC).
+
+> The results shown here are in whole or part based upon data generated by the TCGA Research Network: <https://www.cancer.gov/tcga>.
+
+## Built with
+
+Python · R · pandas · scikit-learn · scikit-survival · bnlearn · gRain · Matplotlib
