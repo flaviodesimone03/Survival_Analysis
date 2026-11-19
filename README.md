@@ -80,11 +80,8 @@ Read the comparison table with two methodological notes:
 Global Kaplan-Meier survival curve with 95% confidence bands (left) and stratified survival curves for curative treatment intent, nodal stage, and recurrence (right). Axis labels in figures are in Italian (*Sopravvivenza S(t)* = survival probability, *Tempo (giorni)* = follow-up days).
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/fdf9ae28-161a-4b59-b751-f4deb9dd71f2" width="750" alt="Curva di sopravvivenza Kaplan-Meier globale" />
-</p>
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/bc11efb3-7551-42fd-9ed2-e4707a15b7c2" width="800" alt="Curve Kaplan-Meier stratificate e test log-rank" />
+  <img src="https://github.com/user-attachments/assets/fdf9ae28-161a-4b59-b751-f4deb9dd71f2 " width="48%" alt="Curva di sopravvivenza Kaplan-Meier globale con intervallo di confidenza al 95%">
+  <img src="https://github.com/user-attachments/assets/bc11efb3-7551-42fd-9ed2-e4707a15b7c2" width="48%" alt="Curve di sopravvivenza Kaplan-Meier stratificate per Intent_CURE, N_grp e Hist_RECURRENCE">
 </p>
 
 ### Bayesian Network Structure
