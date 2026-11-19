@@ -112,7 +112,7 @@ To ensure clinical coherence and prevent statistical artifacts on a moderate-siz
 ## Repository structure
 
 ```
-ProgettoTesiFLavio_de_Simone/
+Survival_Analysis/
 ├── data/
 │   ├── oral_cancer_dataset.xlsx         clinical, staging, and treatment records
 │   ├── follow_up.xlsx                   longitudinal follow-up records
@@ -127,8 +127,8 @@ ProgettoTesiFLavio_de_Simone/
 ## Getting started
 
 ```bash
-git clone https://github.com/flaviodesimone03/ProgettoTesiFLavio_de_Simone.git
-cd ProgettoTesiFLavio_de_Simone
+git clone https://github.com/flaviodesimone03/Survival_Analysis.git
+cd Survival_Analysis
 ```
 
 1. **Python environment (Preprocessing, Kaplan-Meier, Cox PH):**
