@@ -92,7 +92,7 @@ Global Kaplan-Meier survival curve with 95% confidence bands (left) and stratifi
 Directed Acyclic Graph (DAG) learned via hybrid Max-Min Hill-Climbing with BIC scoring and clinical tier constraints. The Markov blanket of `death` consists of `{age_grp, stage, surgery, Hist_METASTASIS, Hist_RECURRENCE}`.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/19ca9a91-bc79-4747-9b35-8a3acd79cf8c" width="600" alt="Grafo aciclico diretto della Rete Bayesiana costruita" />
+  <img src="https://github.com/user-attachments/assets/dd61d2b1-6dec-4fbe-9aee-1f6e1936f53c" width="600" alt="Grafo aciclico diretto della Rete Bayesiana costruita" />
 </p>
 
 ## Methodological Design & Preprocessing
