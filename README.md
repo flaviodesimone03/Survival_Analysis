@@ -80,8 +80,11 @@ Read the comparison table with two methodological notes:
 Global Kaplan-Meier survival curve with 95% confidence bands (left) and stratified survival curves for curative treatment intent, nodal stage, and recurrence (right). Axis labels in figures are in Italian (*Sopravvivenza S(t)* = survival probability, *Tempo (giorni)* = follow-up days).
 
 <p align="center">
-  <img src="results/km_global.png" width="48%" alt="Global Kaplan-Meier survival curve with 95% confidence interval">
-  <img src="results/logrank_stratified.png" width="48%" alt="Stratified Kaplan-Meier survival curves for Intent_CURE, N_grp, and Hist_RECURRENCE">
+  <img src="https://github.com/user-attachments/assets/fdf9ae28-161a-4b59-b751-f4deb9dd71f2" width="750" alt="Curva di sopravvivenza Kaplan-Meier globale" />
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/bc11efb3-7551-42fd-9ed2-e4707a15b7c2" width="800" alt="Curve Kaplan-Meier stratificate e test log-rank" />
 </p>
 
 ### Bayesian Network Structure
@@ -89,7 +92,7 @@ Global Kaplan-Meier survival curve with 95% confidence bands (left) and stratifi
 Directed Acyclic Graph (DAG) learned via hybrid Max-Min Hill-Climbing with BIC scoring and clinical tier constraints. The Markov blanket of `death` consists of `{age_grp, stage, surgery, Hist_METASTASIS, Hist_RECURRENCE}`.
 
 <p align="center">
-  <img src="results/bayesian_network_dag.png" width="60%" alt="Learned Bayesian Network Directed Acyclic Graph for OSCC mortality">
+  <img src="https://github.com/user-attachments/assets/19ca9a91-bc79-4747-9b35-8a3acd79cf8c" width="600" alt="Grafo aciclico diretto della Rete Bayesiana costruita" />
 </p>
 
 ## Methodological Design & Preprocessing
