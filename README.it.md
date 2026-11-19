@@ -118,7 +118,7 @@ Per garantire coerenza clinica e prevenire artefatti statistici su una coorte di
 ## Struttura della repository
 
 ```
-ProgettoTesiFLavio_de_Simone/
+Survival_Analysis/
 ├── data/
 │   ├── oral_cancer_dataset.xlsx         record clinici, di stadiazione e trattamento
 │   ├── follow_up.xlsx                   record longitudinali di follow-up
@@ -134,7 +134,7 @@ ProgettoTesiFLavio_de_Simone/
 ## Avvio rapido
 
 ```bash
-git clone https://github.com/flaviodesimone03/ProgettoTesiFLavio_de_Simone.git
+git clone https://github.com/flaviodesimone03/Survival_Analysis.git
 cd ProgettoTesiFLavio_de_Simone
 ```
 
