@@ -83,8 +83,8 @@ La tabella di confronto va letta tenendo conto di due osservazioni metodologiche
 Curva di sopravvivenza globale di Kaplan-Meier con bande di confidenza al 95% (a sinistra) e curve di sopravvivenza stratificate per intento terapeutico curativo, stadio linfonodale e recidiva (a destra).
 
 <p align="center">
-  <img src="results/km_global.png" width="48%" alt="Curva di sopravvivenza Kaplan-Meier globale con intervallo di confidenza al 95%">
-  <img src="results/logrank_stratified.png" width="48%" alt="Curve di sopravvivenza Kaplan-Meier stratificate per Intent_CURE, N_grp e Hist_RECURRENCE">
+  <img src="https://github.com/user-attachments/assets/fdf9ae28-161a-4b59-b751-f4deb9dd71f2 " width="48%" alt="Curva di sopravvivenza Kaplan-Meier globale con intervallo di confidenza al 95%">
+  <img src="https://github.com/user-attachments/assets/bc11efb3-7551-42fd-9ed2-e4707a15b7c2" width="48%" alt="Curve di sopravvivenza Kaplan-Meier stratificate per Intent_CURE, N_grp e Hist_RECURRENCE">
 </p>
 
 ### Struttura della Rete Bayesiana
@@ -92,7 +92,7 @@ Curva di sopravvivenza globale di Kaplan-Meier con bande di confidenza al 95% (a
 Grafo Aciclico Diretto (DAG) appreso tramite algoritmo ibrido Max-Min Hill-Climbing con punteggio BIC e vincoli clinici a priori. Il Markov blanket di `death` coincide con `{age_grp, stage, surgery, Hist_METASTASIS, Hist_RECURRENCE}`.
 
 <p align="center">
-  <img src="results/bayesian_network_dag.png" width="60%" alt="Grafo Aciclico Diretto della Rete Bayesiana appresa per la mortalità OSCC">
+  <img src="https://github.com/user-attachments/assets/dd61d2b1-6dec-4fbe-9aee-1f6e1936f53c" width="60%" alt="Grafo Aciclico Diretto della Rete Bayesiana appresa per la mortalità OSCC">
 </p>
 
 ## Scelte Metodologiche e Pre-processing
